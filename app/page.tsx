@@ -1,13 +1,13 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { useState, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 import {
   ExternalLink,
   Loader2,
@@ -27,153 +27,168 @@ import {
   ChevronDown,
   FolderPlus,
   Trash2,
-} from "lucide-react"
+} from "lucide-react";
 
 interface Registry {
-  name: string
-  url: string
-  domain: string
+  name: string;
+  url: string;
+  domain: string;
 }
 
 interface LibraryItem {
-  url: string
-  title: string
-  registryName: string
-  addedAt: number
+  url: string;
+  title: string;
+  registryName: string;
+  addedAt: number;
 }
 
 interface LibraryFolder {
-  id: string
-  name: string
-  items: LibraryItem[]
-  collapsed?: boolean
+  id: string;
+  name: string;
+  items: LibraryItem[];
+  collapsed?: boolean;
 }
 
+const CUSTOM_REGISTRIES = [
+  {
+    name: "21st.dev",
+    url: "https://21st.dev/home",
+    domain: "21st.dev",
+  },
+];
+
 export default function RegistryPreview() {
-  const [registries, setRegistries] = useState<Registry[]>([])
-  const [filteredRegistries, setFilteredRegistries] = useState<Registry[]>([])
-  const [selectedRegistry, setSelectedRegistry] = useState<Registry | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [favorites, setFavorites] = useState<Set<string>>(new Set())
-  const [iframeUrl, setIframeUrl] = useState("")
+  const [registries, setRegistries] = useState<Registry[]>([]);
+  const [filteredRegistries, setFilteredRegistries] = useState<Registry[]>([]);
+  const [selectedRegistry, setSelectedRegistry] = useState<Registry | null>(
+    null
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [iframeUrl, setIframeUrl] = useState("");
 
   // Library management state
-  const [libraries, setLibraries] = useState<LibraryFolder[]>([])
-  const [showAddToLibraryDialog, setShowAddToLibraryDialog] = useState(false)
-  const [showCreateLibraryDialog, setShowCreateLibraryDialog] = useState(false)
-  const [newLibraryName, setNewLibraryName] = useState("")
-  const [selectedLibraries, setSelectedLibraries] = useState<Set<string>>(new Set())
-  const [favoritesMode, setFavoritesMode] = useState(false)
-  const [currentPageTitle, setCurrentPageTitle] = useState("")
-  const [editableUrl, setEditableUrl] = useState("")
-  const [extensionActive, setExtensionActive] = useState(false)
-  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [libraries, setLibraries] = useState<LibraryFolder[]>([]);
+  const [showAddToLibraryDialog, setShowAddToLibraryDialog] = useState(false);
+  const [showCreateLibraryDialog, setShowCreateLibraryDialog] = useState(false);
+  const [newLibraryName, setNewLibraryName] = useState("");
+  const [selectedLibraries, setSelectedLibraries] = useState<Set<string>>(
+    new Set()
+  );
+  const [favoritesMode, setFavoritesMode] = useState(false);
+  const [currentPageTitle, setCurrentPageTitle] = useState("");
+  const [editableUrl, setEditableUrl] = useState("");
+  const [extensionActive, setExtensionActive] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    fetchRegistries()
-    loadFavorites()
-    loadLibraries()
-  }, [])
+    fetchRegistries();
+    loadFavorites();
+    loadLibraries();
+  }, []);
 
   useEffect(() => {
     const filtered = registries.filter(
       (registry) =>
         registry.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        registry.domain.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
+        registry.domain.toLowerCase().includes(searchQuery.toLowerCase())
+    );
     const sortedFiltered = filtered.sort((a, b) => {
-      const aIsFav = favorites.has(a.domain)
-      const bIsFav = favorites.has(b.domain)
-      if (aIsFav && !bIsFav) return -1
-      if (!aIsFav && bIsFav) return 1
-      return 0
-    })
-    setFilteredRegistries(sortedFiltered)
-  }, [registries, searchQuery, favorites])
+      const aIsFav = favorites.has(a.domain);
+      const bIsFav = favorites.has(b.domain);
+      if (aIsFav && !bIsFav) return -1;
+      if (!aIsFav && bIsFav) return 1;
+      return 0;
+    });
+    setFilteredRegistries(sortedFiltered);
+  }, [registries, searchQuery, favorites]);
 
   useEffect(() => {
     if (selectedRegistry) {
-      setIframeUrl(selectedRegistry.url)
-      setCurrentPageTitle(selectedRegistry.name)
+      setIframeUrl(selectedRegistry.url);
+      setCurrentPageTitle(selectedRegistry.name);
     }
-  }, [selectedRegistry])
+  }, [selectedRegistry]);
 
   // Listen for messages from the browser extension
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Check if message is from our extension
-      if (event.data && event.data.type === 'SHADCN_HUB_IFRAME_URL_UPDATE') {
-        setIframeUrl(event.data.url)
-        setExtensionActive(true)
+      if (event.data && event.data.type === "SHADCN_HUB_IFRAME_URL_UPDATE") {
+        setIframeUrl(event.data.url);
+        setExtensionActive(true);
         if (event.data.title) {
-          setCurrentPageTitle(event.data.title)
+          setCurrentPageTitle(event.data.title);
         }
       }
-    }
+    };
 
-    window.addEventListener('message', handleMessage)
+    window.addEventListener("message", handleMessage);
 
     return () => {
-      window.removeEventListener('message', handleMessage)
-    }
-  }, [])
+      window.removeEventListener("message", handleMessage);
+    };
+  }, []);
 
   const loadFavorites = () => {
     try {
-      const savedFavorites = localStorage.getItem("registry-favorites")
+      const savedFavorites = localStorage.getItem("registry-favorites");
       if (savedFavorites) {
-        setFavorites(new Set(JSON.parse(savedFavorites)))
+        setFavorites(new Set(JSON.parse(savedFavorites)));
       }
     } catch (error) {
-      console.error("Error loading favorites:", error)
+      console.error("Error loading favorites:", error);
     }
-  }
+  };
 
   const saveFavorites = (newFavorites: Set<string>) => {
     try {
-      localStorage.setItem("registry-favorites", JSON.stringify(Array.from(newFavorites)))
+      localStorage.setItem(
+        "registry-favorites",
+        JSON.stringify(Array.from(newFavorites))
+      );
     } catch (error) {
-      console.error("Error saving favorites:", error)
+      console.error("Error saving favorites:", error);
     }
-  }
+  };
 
   const toggleFavorite = (domain: string) => {
-    const newFavorites = new Set(favorites)
+    const newFavorites = new Set(favorites);
     if (newFavorites.has(domain)) {
-      newFavorites.delete(domain)
+      newFavorites.delete(domain);
     } else {
-      newFavorites.add(domain)
-      const registryList = document.querySelector(".flex-1.overflow-y-auto")
+      newFavorites.add(domain);
+      const registryList = document.querySelector(".flex-1.overflow-y-auto");
       if (registryList) {
-        registryList.scrollTo({ top: 0, behavior: "smooth" })
+        registryList.scrollTo({ top: 0, behavior: "smooth" });
       }
     }
-    setFavorites(newFavorites)
-    saveFavorites(newFavorites)
-  }
+    setFavorites(newFavorites);
+    saveFavorites(newFavorites);
+  };
 
   // Library management functions
   const loadLibraries = () => {
     try {
-      const savedLibraries = localStorage.getItem("component-libraries")
+      const savedLibraries = localStorage.getItem("component-libraries");
       if (savedLibraries) {
-        setLibraries(JSON.parse(savedLibraries))
+        setLibraries(JSON.parse(savedLibraries));
       }
     } catch (error) {
-      console.error("Error loading libraries:", error)
+      console.error("Error loading libraries:", error);
     }
-  }
+  };
 
   const saveLibraries = (newLibraries: LibraryFolder[]) => {
     try {
-      localStorage.setItem("component-libraries", JSON.stringify(newLibraries))
-      setLibraries(newLibraries)
+      localStorage.setItem("component-libraries", JSON.stringify(newLibraries));
+      setLibraries(newLibraries);
     } catch (error) {
-      console.error("Error saving libraries:", error)
+      console.error("Error saving libraries:", error);
     }
-  }
+  };
 
   const createLibrary = () => {
     if (newLibraryName.trim()) {
@@ -182,138 +197,144 @@ export default function RegistryPreview() {
         name: newLibraryName.trim(),
         items: [],
         collapsed: false,
-      }
-      saveLibraries([...libraries, newLibrary])
-      setNewLibraryName("")
-      setShowCreateLibraryDialog(false)
+      };
+      saveLibraries([...libraries, newLibrary]);
+      setNewLibraryName("");
+      setShowCreateLibraryDialog(false);
     }
-  }
+  };
 
   const deleteLibrary = (libraryId: string) => {
-    const updatedLibraries = libraries.filter((lib) => lib.id !== libraryId)
-    saveLibraries(updatedLibraries)
-  }
+    const updatedLibraries = libraries.filter((lib) => lib.id !== libraryId);
+    saveLibraries(updatedLibraries);
+  };
 
   const toggleLibraryCollapse = (libraryId: string) => {
     const updatedLibraries = libraries.map((lib) =>
-      lib.id === libraryId ? { ...lib, collapsed: !lib.collapsed } : lib,
-    )
-    saveLibraries(updatedLibraries)
-  }
+      lib.id === libraryId ? { ...lib, collapsed: !lib.collapsed } : lib
+    );
+    saveLibraries(updatedLibraries);
+  };
 
   const addToLibraries = () => {
-    if (selectedLibraries.size === 0 || !editableUrl.trim()) return
+    if (selectedLibraries.size === 0 || !editableUrl.trim()) return;
 
     const newItem: LibraryItem = {
       url: editableUrl.trim(),
       title: currentPageTitle,
       registryName: selectedRegistry?.name || "Unknown",
       addedAt: Date.now(),
-    }
+    };
 
     const updatedLibraries = libraries.map((lib) => {
       if (selectedLibraries.has(lib.id)) {
         // Check if item already exists
-        const exists = lib.items.some((item) => item.url === newItem.url)
+        const exists = lib.items.some((item) => item.url === newItem.url);
         if (!exists) {
-          return { ...lib, items: [...lib.items, newItem] }
+          return { ...lib, items: [...lib.items, newItem] };
         }
       }
-      return lib
-    })
+      return lib;
+    });
 
-    saveLibraries(updatedLibraries)
-    setSelectedLibraries(new Set())
-    setShowAddToLibraryDialog(false)
-  }
+    saveLibraries(updatedLibraries);
+    setSelectedLibraries(new Set());
+    setShowAddToLibraryDialog(false);
+  };
 
   const removeFromLibrary = (libraryId: string, itemUrl: string) => {
     const updatedLibraries = libraries.map((lib) => {
       if (lib.id === libraryId) {
-        return { ...lib, items: lib.items.filter((item) => item.url !== itemUrl) }
+        return {
+          ...lib,
+          items: lib.items.filter((item) => item.url !== itemUrl),
+        };
       }
-      return lib
-    })
-    saveLibraries(updatedLibraries)
-  }
+      return lib;
+    });
+    saveLibraries(updatedLibraries);
+  };
 
   const getCurrentIframeUrl = (): string => {
-    if (!iframeRef.current) return iframeUrl
+    if (!iframeRef.current) return iframeUrl;
 
     try {
       // Try to get the actual URL from iframe (will fail for cross-origin)
-      const currentUrl = iframeRef.current.contentWindow?.location.href
+      const currentUrl = iframeRef.current.contentWindow?.location.href;
       if (currentUrl && currentUrl !== "about:blank") {
-        return currentUrl
+        return currentUrl;
       }
     } catch (e) {
       // Cross-origin restriction - fall back to src attribute
     }
 
     // Fallback to src attribute
-    return iframeRef.current.src || iframeUrl
-  }
+    return iframeRef.current.src || iframeUrl;
+  };
 
   const openAddToLibraryDialog = () => {
     // Get the current iframe URL
-    const currentUrl = getCurrentIframeUrl()
-    setEditableUrl(currentUrl)
-    
+    const currentUrl = getCurrentIframeUrl();
+    setEditableUrl(currentUrl);
+
     // Pre-select libraries that already contain this URL
     const librariesWithUrl = new Set(
-      libraries.filter((lib) => lib.items.some((item) => item.url === currentUrl)).map((lib) => lib.id),
-    )
-    setSelectedLibraries(librariesWithUrl)
-    setShowAddToLibraryDialog(true)
-  }
+      libraries
+        .filter((lib) => lib.items.some((item) => item.url === currentUrl))
+        .map((lib) => lib.id)
+    );
+    setSelectedLibraries(librariesWithUrl);
+    setShowAddToLibraryDialog(true);
+  };
 
   const openLibraryItem = (item: LibraryItem) => {
-    setIframeUrl(item.url)
-    setCurrentPageTitle(item.title)
-  }
+    setIframeUrl(item.url);
+    setCurrentPageTitle(item.title);
+  };
 
   const fetchRegistries = async () => {
     try {
-      setLoading(true)
-      const res = await fetch("https://ui.shadcn.com/r/registries.json")
-      const registriesData = await res.json()
+      setLoading(true);
+      const res = await fetch("https://ui.shadcn.com/r/registries.json");
+      const registriesData = await res.json();
 
       const domains = [
         ...new Set(
           Object.values(registriesData).map((url: any) => {
-            const u = new URL(url.replace("{name}", "test"))
-            return u.protocol + "//" + u.host
-          }),
+            const u = new URL(url.replace("{name}", "test"));
+            return u.protocol + "//" + u.host;
+          })
         ),
-      ]
+      ];
 
       // Add custom registry
-      const customRegistry = "https://21st.dev/"
-      if (!domains.includes(customRegistry)) {
-        domains.push(customRegistry)
+      for (const customRegistry of CUSTOM_REGISTRIES) {
+        if (!domains.includes(customRegistry.url)) {
+          domains.push(customRegistry.url);
+        }
       }
 
       const registryList = domains.map((domain) => ({
         name: new URL(domain).hostname.replace("www.", ""),
         url: domain,
         domain: domain,
-      }))
+      }));
 
-      setRegistries(registryList)
+      setRegistries(registryList);
       if (registryList.length > 0) {
-        setSelectedRegistry(registryList[0])
+        setSelectedRegistry(registryList[0]);
       }
     } catch (err) {
-      console.error("Error fetching registries:", err)
-      setError("Failed to fetch registries")
+      console.error("Error fetching registries:", err);
+      setError("Failed to fetch registries");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const openInNewTab = (url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer")
-  }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   if (loading) {
     return (
@@ -323,7 +344,7 @@ export default function RegistryPreview() {
           <span>Loading registries...</span>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -340,7 +361,7 @@ export default function RegistryPreview() {
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   return (
@@ -371,14 +392,19 @@ export default function RegistryPreview() {
                 <span className="text-xs">Libraries</span>
               </Button>
             </div>
-            <Badge variant="outline" className="text-xs min-w-[3rem] justify-center">
+            <Badge
+              variant="outline"
+              className="text-xs min-w-[3rem] justify-center"
+            >
               {favoritesMode ? libraries.length : filteredRegistries.length}
             </Badge>
           </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder={favoritesMode ? "Search libraries..." : "Search registries..."}
+              placeholder={
+                favoritesMode ? "Search libraries..." : "Search registries..."
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8 h-8 text-sm"
@@ -394,21 +420,25 @@ export default function RegistryPreview() {
                 <div
                   key={index}
                   className={`p-4 border-b border-border cursor-pointer hover:bg-accent/50 transition-colors ${
-                    selectedRegistry?.domain === registry.domain ? "bg-accent" : ""
+                    selectedRegistry?.domain === registry.domain
+                      ? "bg-accent"
+                      : ""
                   }`}
                   onClick={() => setSelectedRegistry(registry)}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{registry.name}</span>
+                      <span className="font-medium text-sm">
+                        {registry.name}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={(e) => {
-                          e.stopPropagation()
-                          toggleFavorite(registry.domain)
+                          e.stopPropagation();
+                          toggleFavorite(registry.domain);
                         }}
                         className="h-6 w-6 p-0 hover:bg-primary/20"
                       >
@@ -424,8 +454,8 @@ export default function RegistryPreview() {
                         size="sm"
                         variant="ghost"
                         onClick={(e) => {
-                          e.stopPropagation()
-                          openInNewTab(registry.url)
+                          e.stopPropagation();
+                          openInNewTab(registry.url);
                         }}
                         className="h-6 w-6 p-0 hover:bg-primary/20"
                       >
@@ -433,13 +463,17 @@ export default function RegistryPreview() {
                       </Button>
                     </div>
                   </div>
-                  <code className="text-xs text-muted-foreground block truncate">{registry.domain}</code>
+                  <code className="text-xs text-muted-foreground block truncate">
+                    {registry.domain}
+                  </code>
                 </div>
               ))}
 
               {filteredRegistries.length === 0 && (
                 <div className="p-8 text-center">
-                  <p className="text-sm text-muted-foreground">No registries found</p>
+                  <p className="text-sm text-muted-foreground">
+                    No registries found
+                  </p>
                 </div>
               )}
             </div>
@@ -447,7 +481,12 @@ export default function RegistryPreview() {
             // Libraries view
             <div className="p-2">
               <div className="mb-2">
-                <Button onClick={() => setShowCreateLibraryDialog(true)} size="sm" className="w-full" variant="outline">
+                <Button
+                  onClick={() => setShowCreateLibraryDialog(true)}
+                  size="sm"
+                  className="w-full"
+                  variant="outline"
+                >
                   <FolderPlus className="h-4 w-4 mr-2" />
                   New Library
                 </Button>
@@ -456,12 +495,19 @@ export default function RegistryPreview() {
               {libraries.length === 0 ? (
                 <div className="p-8 text-center">
                   <Library className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">No libraries yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">Create a library to organize your components</p>
+                  <p className="text-sm text-muted-foreground">
+                    No libraries yet
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Create a library to organize your components
+                  </p>
                 </div>
               ) : (
                 libraries.map((library) => (
-                  <div key={library.id} className="mb-2 border border-border rounded-lg overflow-hidden">
+                  <div
+                    key={library.id}
+                    className="mb-2 border border-border rounded-lg overflow-hidden"
+                  >
                     <div className="flex items-center justify-between p-2 bg-accent/30 hover:bg-accent/50 cursor-pointer">
                       <div
                         className="flex items-center gap-2 flex-1"
@@ -472,7 +518,9 @@ export default function RegistryPreview() {
                         ) : (
                           <ChevronDown className="h-4 w-4" />
                         )}
-                        <span className="font-medium text-sm">{library.name}</span>
+                        <span className="font-medium text-sm">
+                          {library.name}
+                        </span>
                         <Badge variant="secondary" className="text-xs">
                           {library.items.length}
                         </Badge>
@@ -481,9 +529,9 @@ export default function RegistryPreview() {
                         size="sm"
                         variant="ghost"
                         onClick={(e) => {
-                          e.stopPropagation()
+                          e.stopPropagation();
                           if (confirm(`Delete library "${library.name}"?`)) {
-                            deleteLibrary(library.id)
+                            deleteLibrary(library.id);
                           }
                         }}
                         className="h-6 w-6 p-0"
@@ -495,7 +543,9 @@ export default function RegistryPreview() {
                     {!library.collapsed && (
                       <div className="p-1">
                         {library.items.length === 0 ? (
-                          <div className="p-4 text-center text-xs text-muted-foreground">No items yet</div>
+                          <div className="p-4 text-center text-xs text-muted-foreground">
+                            No items yet
+                          </div>
                         ) : (
                           library.items.map((item, idx) => (
                             <div
@@ -504,15 +554,19 @@ export default function RegistryPreview() {
                               onClick={() => openLibraryItem(item)}
                             >
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{item.title}</p>
-                                <p className="text-xs text-muted-foreground truncate">{item.registryName}</p>
+                                <p className="text-sm font-medium truncate">
+                                  {item.title}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {item.registryName}
+                                </p>
                               </div>
                               <Button
                                 size="sm"
                                 variant="ghost"
                                 onClick={(e) => {
-                                  e.stopPropagation()
-                                  removeFromLibrary(library.id, item.url)
+                                  e.stopPropagation();
+                                  removeFromLibrary(library.id, item.url);
                                 }}
                                 className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                               >
@@ -546,7 +600,11 @@ export default function RegistryPreview() {
               />
               {/* Floating "Add to Library" button */}
               <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button onClick={openAddToLibraryDialog} size="sm" className="shadow-lg">
+                <Button
+                  onClick={openAddToLibraryDialog}
+                  size="sm"
+                  className="shadow-lg"
+                >
                   <BookmarkPlus className="h-4 w-4 mr-2" />
                   Add to Library
                 </Button>
@@ -563,14 +621,24 @@ export default function RegistryPreview() {
       </div>
 
       {/* Add to Library Dialog */}
-      <Dialog open={showAddToLibraryDialog} onOpenChange={setShowAddToLibraryDialog}>
+      <Dialog
+        open={showAddToLibraryDialog}
+        onOpenChange={setShowAddToLibraryDialog}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add to Library</DialogTitle>
             <DialogDescription>
               {!extensionActive && (
                 <span className="text-purple-500">
-                  <a href="https://github.com/pratikpakhale/shadcn" target="_blank" className="underline">Install the extension</a> for correct URL tracking.
+                  <a
+                    href="https://github.com/pratikpakhale/shadcn"
+                    target="_blank"
+                    className="underline"
+                  >
+                    Install the extension
+                  </a>{" "}
+                  for correct URL tracking.
                 </span>
               )}
             </DialogDescription>
@@ -578,8 +646,16 @@ export default function RegistryPreview() {
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="url-input" className="text-sm font-medium mb-2 block">
-                URL {extensionActive && <Badge variant="secondary" className="text-xs ml-2">Auto-tracked</Badge>}
+              <Label
+                htmlFor="url-input"
+                className="text-sm font-medium mb-2 block"
+              >
+                URL{" "}
+                {extensionActive && (
+                  <Badge variant="secondary" className="text-xs ml-2">
+                    Auto-tracked
+                  </Badge>
+                )}
               </Label>
               <Input
                 id="url-input"
@@ -590,11 +666,18 @@ export default function RegistryPreview() {
               />
             </div>
             <div>
-              <Label className="text-sm font-medium mb-2 block">Libraries</Label>
+              <Label className="text-sm font-medium mb-2 block">
+                Libraries
+              </Label>
               {libraries.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-sm text-muted-foreground mb-4">No libraries yet. Create one first!</p>
-                  <Button onClick={() => setShowCreateLibraryDialog(true)} variant="outline">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    No libraries yet. Create one first!
+                  </p>
+                  <Button
+                    onClick={() => setShowCreateLibraryDialog(true)}
+                    variant="outline"
+                  >
                     <FolderPlus className="h-4 w-4 mr-2" />
                     Create Library
                   </Button>
@@ -603,23 +686,31 @@ export default function RegistryPreview() {
                 <ScrollArea className="max-h-[250px] border rounded-md p-3">
                   <div className="space-y-3">
                     {libraries.map((library) => {
-                      const alreadyInLibrary = library.items.some((item) => item.url === editableUrl)
+                      const alreadyInLibrary = library.items.some(
+                        (item) => item.url === editableUrl
+                      );
                       return (
-                        <div key={library.id} className="flex items-center space-x-3">
+                        <div
+                          key={library.id}
+                          className="flex items-center space-x-3"
+                        >
                           <Checkbox
                             id={library.id}
                             checked={selectedLibraries.has(library.id)}
                             onCheckedChange={(checked) => {
-                              const newSelected = new Set(selectedLibraries)
+                              const newSelected = new Set(selectedLibraries);
                               if (checked) {
-                                newSelected.add(library.id)
+                                newSelected.add(library.id);
                               } else {
-                                newSelected.delete(library.id)
+                                newSelected.delete(library.id);
                               }
-                              setSelectedLibraries(newSelected)
+                              setSelectedLibraries(newSelected);
                             }}
                           />
-                          <Label htmlFor={library.id} className="flex-1 cursor-pointer">
+                          <Label
+                            htmlFor={library.id}
+                            className="flex-1 cursor-pointer"
+                          >
                             <div className="flex items-center justify-between">
                               <span>{library.name}</span>
                               {alreadyInLibrary && (
@@ -630,7 +721,7 @@ export default function RegistryPreview() {
                             </div>
                           </Label>
                         </div>
-                      )
+                      );
                     })}
                   </div>
                 </ScrollArea>
@@ -640,11 +731,18 @@ export default function RegistryPreview() {
 
           {libraries.length > 0 && (
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddToLibraryDialog(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddToLibraryDialog(false)}
+              >
                 Cancel
               </Button>
-              <Button onClick={addToLibraries} disabled={selectedLibraries.size === 0 || !editableUrl.trim()}>
-                Add to {selectedLibraries.size} {selectedLibraries.size === 1 ? "Library" : "Libraries"}
+              <Button
+                onClick={addToLibraries}
+                disabled={selectedLibraries.size === 0 || !editableUrl.trim()}
+              >
+                Add to {selectedLibraries.size}{" "}
+                {selectedLibraries.size === 1 ? "Library" : "Libraries"}
               </Button>
             </DialogFooter>
           )}
@@ -652,11 +750,16 @@ export default function RegistryPreview() {
       </Dialog>
 
       {/* Create Library Dialog */}
-      <Dialog open={showCreateLibraryDialog} onOpenChange={setShowCreateLibraryDialog}>
+      <Dialog
+        open={showCreateLibraryDialog}
+        onOpenChange={setShowCreateLibraryDialog}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New Library</DialogTitle>
-            <DialogDescription>Give your library a name to organize your favorite components.</DialogDescription>
+            <DialogDescription>
+              Give your library a name to organize your favorite components.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="py-4">
@@ -666,14 +769,17 @@ export default function RegistryPreview() {
               onChange={(e) => setNewLibraryName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  createLibrary()
+                  createLibrary();
                 }
               }}
             />
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateLibraryDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateLibraryDialog(false)}
+            >
               Cancel
             </Button>
             <Button onClick={createLibrary} disabled={!newLibraryName.trim()}>
@@ -683,5 +789,5 @@ export default function RegistryPreview() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }
