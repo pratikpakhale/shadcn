@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Shadcn Hub URL Tracker",
+  "version": "1.0.0",
+  "description": "Tracks iframe navigation for Shadcn Hub and sends URL updates to parent window",
+  "permissions": [
+    "tabs",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

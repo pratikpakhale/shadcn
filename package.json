@@ -1,6 +1,8 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "shadcn-hub",
+  "version": "1.0.0",
+  "description": "A modern component registry explorer with advanced library management",
+  "author": "Pratik Pakhale",
   "private": true,
   "scripts": {
     "build": "next build",
