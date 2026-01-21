@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,7 @@ export default function RegistryPreview() {
   const [editableUrl, setEditableUrl] = useState("");
   const [extensionActive, setExtensionActive] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const hasRegistries = useMemo(() => registries.length > 0, [registries]);
 
   useEffect(() => {
     fetchRegistries();
@@ -293,14 +294,14 @@ export default function RegistryPreview() {
   };
 
   const fetchRegistries = async () => {
+    const isInitialFetch = registries.length === 0;
+
     try {
-      setLoading(true);
       setError(null);
+      setLoading(true);
       const res = await fetch("https://ui.shadcn.com/r/registries.json");
       if (!res.ok) {
-        throw new Error(
-          `Failed to fetch registries: ${res.status} ${res.statusText}`
-        );
+        throw new Error("Failed to fetch registries.");
       }
       const registriesData = await res.json();
 
@@ -332,13 +333,12 @@ export default function RegistryPreview() {
       }
     } catch (err) {
       console.error("Error fetching registries:", err);
-      const errorMessage =
-        registries.length === 0
-          ? "Failed to fetch registries. Showing custom defaults."
-          : "Failed to refresh registries.";
-      if (registries.length === 0) {
+      const errorMessage = isInitialFetch
+        ? "Failed to fetch registries. Showing custom defaults."
+        : "Failed to refresh registries.";
+      if (isInitialFetch) {
         setRegistries(CUSTOM_REGISTRIES);
-        setSelectedRegistry(CUSTOM_REGISTRIES[0] ?? null);
+        setSelectedRegistry(CUSTOM_REGISTRIES[0]);
       }
       setError(errorMessage);
     } finally {
@@ -361,7 +361,7 @@ export default function RegistryPreview() {
     );
   }
 
-  if (error && registries.length === 0) {
+  if (error && !hasRegistries) {
     return (
       <div className="h-screen bg-background flex items-center justify-center">
         <Card className="w-full max-w-md">
@@ -424,7 +424,7 @@ export default function RegistryPreview() {
               className="pl-8 h-8 text-sm"
             />
           </div>
-          {error && registries.length > 0 && (
+          {error && hasRegistries && (
             <p className="mt-2 text-xs text-destructive">{error}</p>
           )}
         </div>
