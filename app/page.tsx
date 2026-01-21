@@ -293,11 +293,49 @@ export default function RegistryPreview() {
     setCurrentPageTitle(item.title);
   };
 
+  const parseRegistryDomains = (data: unknown) => {
+    const entries = Array.isArray(data)
+      ? data
+      : data && typeof data === "object"
+        ? Object.values(data as Record<string, unknown>)
+        : [];
+
+    const domains = new Set<string>();
+
+    for (const entry of entries) {
+      let registryUrl: string | null = null;
+
+      if (typeof entry === "string") {
+        registryUrl = entry;
+      } else if (entry && typeof entry === "object") {
+        const record = entry as Record<string, unknown>;
+        if (typeof record.registry === "string") {
+          registryUrl = record.registry;
+        } else if (typeof record.url === "string") {
+          registryUrl = record.url;
+        }
+      }
+
+      if (!registryUrl) continue;
+
+      try {
+        const normalizedUrl = registryUrl.includes("{name}")
+          ? registryUrl.replace("{name}", "test")
+          : registryUrl;
+        const parsedUrl = new URL(normalizedUrl);
+        domains.add(`${parsedUrl.protocol}//${parsedUrl.host}`);
+      } catch (parseError) {
+        console.warn("Skipping invalid registry URL:", registryUrl, parseError);
+      }
+    }
+
+    return Array.from(domains);
+  };
+
   const fetchRegistries = async () => {
     const isInitialFetch = registries.length === 0;
 
     try {
-      setError(null);
       setLoading(true);
       const res = await fetch("https://ui.shadcn.com/r/registries.json");
       if (!res.ok) {
@@ -305,14 +343,15 @@ export default function RegistryPreview() {
       }
       const registriesData = await res.json();
 
-      const domains = [
-        ...new Set(
-          Object.values(registriesData).map((url: any) => {
-            const u = new URL(url.replace("{name}", "test"));
-            return u.protocol + "//" + u.host;
-          })
-        ),
-      ];
+      const parsedDomains = parseRegistryDomains(registriesData);
+      if (parsedDomains.length === 0) {
+        setRegistries(CUSTOM_REGISTRIES);
+        setSelectedRegistry(CUSTOM_REGISTRIES[0] ?? null);
+        setError("Unable to load registries. Showing custom defaults.");
+        return;
+      }
+
+      const domains = [...parsedDomains];
 
       // Add custom registry
       for (const customRegistry of CUSTOM_REGISTRIES) {
@@ -327,20 +366,27 @@ export default function RegistryPreview() {
         domain: domain,
       }));
 
-      setRegistries(registryList);
-      if (registryList.length > 0) {
-        setSelectedRegistry(registryList[0]);
-      }
+      const sortedRegistries = registryList.sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+
+      setRegistries(sortedRegistries);
+      setSelectedRegistry(sortedRegistries[0] ?? null);
+      setError(null);
     } catch (err) {
       console.error("Error fetching registries:", err);
-      const errorMessage = isInitialFetch
-        ? "Failed to fetch registries. Showing custom defaults."
-        : "Failed to refresh registries.";
-      if (isInitialFetch) {
+      const isFallbackOnly =
+        registries.length === CUSTOM_REGISTRIES.length &&
+        registries.every((registry) =>
+          CUSTOM_REGISTRIES.some((custom) => custom.url === registry.url)
+        );
+      if (isInitialFetch || isFallbackOnly) {
         setRegistries(CUSTOM_REGISTRIES);
-        setSelectedRegistry(CUSTOM_REGISTRIES[0]);
+        setSelectedRegistry(CUSTOM_REGISTRIES[0] ?? null);
+        setError("Unable to load registries. Showing custom defaults.");
+      } else {
+        setError(null);
       }
-      setError(errorMessage);
     } finally {
       setLoading(false);
     }
