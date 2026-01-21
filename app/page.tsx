@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,7 @@ export default function RegistryPreview() {
   const [editableUrl, setEditableUrl] = useState("");
   const [extensionActive, setExtensionActive] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const hasRegistries = useMemo(() => registries.length > 0, [registries]);
 
   useEffect(() => {
     fetchRegistries();
@@ -292,41 +293,165 @@ export default function RegistryPreview() {
     setCurrentPageTitle(item.title);
   };
 
-  const fetchRegistries = async () => {
+  const REGISTRY_NAME_PLACEHOLDER = "registry";
+
+  const parseRegistryDomain = (registryUrl: string) => {
     try {
-      setLoading(true);
-      const res = await fetch("https://ui.shadcn.com/r/registries.json");
-      const registriesData = await res.json();
+      const parsedUrl = new URL(
+        registryUrl.replaceAll("{name}", REGISTRY_NAME_PLACEHOLDER)
+      );
+      return { domain: `${parsedUrl.protocol}//${parsedUrl.host}`, error: null };
+    } catch (parseError) {
+      return {
+        domain: null,
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      };
+    }
+  };
 
-      const domains = [
-        ...new Set(
-          Object.values(registriesData).map((url: any) => {
-            const u = new URL(url.replace("{name}", "test"));
-            return u.protocol + "//" + u.host;
-          })
-        ),
-      ];
+  const isFallbackOnly = (currentRegistries: Registry[]) => {
+    const isNonEmptyString = (value: string | null): value is string =>
+      typeof value === "string" && value.length > 0;
+    const customRegistryDomains = new Set(
+      CUSTOM_REGISTRIES.map((registry) => parseRegistryDomain(registry.url).domain)
+        .filter(isNonEmptyString)
+    );
+    const currentDomains = new Set(
+      currentRegistries
+      .map(
+        (registry) =>
+          parseRegistryDomain(registry.url).domain ?? registry.domain ?? null
+      )
+      .filter(isNonEmptyString)
+    );
+    return (
+      currentDomains.size === customRegistryDomains.size &&
+      Array.from(currentDomains).every((domain) =>
+        customRegistryDomains.has(domain)
+      )
+    );
+  };
 
-      // Add custom registry
-      for (const customRegistry of CUSTOM_REGISTRIES) {
-        if (!domains.includes(customRegistry.url)) {
-          domains.push(customRegistry.url);
+  // Extract registry base domains from registries.json entries.
+  const parseRegistryDomains = (data: unknown) => {
+    const entries = Array.isArray(data)
+      ? data
+      : data && typeof data === "object"
+        ? Object.values(data as Record<string, unknown>)
+        : [];
+
+    const domains = new Set<string>();
+
+    for (const entry of entries) {
+      let registryUrl: string | null = null;
+
+      if (typeof entry === "string") {
+        registryUrl = entry;
+      } else if (entry && typeof entry === "object") {
+        const record = entry as Record<string, unknown>;
+        if (typeof record.registry === "string") {
+          registryUrl = record.registry;
+        } else if (typeof record.url === "string") {
+          registryUrl = record.url;
         }
       }
 
-      const registryList = domains.map((domain) => ({
-        name: new URL(domain).hostname.replace("www.", ""),
-        url: domain,
-        domain: domain,
-      }));
+      if (!registryUrl) continue;
 
-      setRegistries(registryList);
-      if (registryList.length > 0) {
-        setSelectedRegistry(registryList[0]);
+      const { domain: normalizedDomain, error } =
+        parseRegistryDomain(registryUrl);
+      if (!normalizedDomain) {
+        console.warn(
+          `Skipping invalid registry URL: ${registryUrl}. ${
+            error ?? "Unable to parse URL."
+          }`
+        );
+        continue;
       }
+
+      domains.add(normalizedDomain);
+    }
+
+    return Array.from(domains);
+  };
+
+  const fetchRegistries = async () => {
+    const isInitialFetch = registries.length === 0;
+
+    try {
+      setError(null);
+      setLoading(true);
+      const res = await fetch("https://ui.shadcn.com/r/registries.json");
+      if (!res.ok) {
+        throw new Error("Failed to fetch registries.");
+      }
+      const registriesData = await res.json();
+
+      const parsedDomains = parseRegistryDomains(registriesData);
+      if (parsedDomains.length === 0) {
+        setRegistries(CUSTOM_REGISTRIES);
+        setSelectedRegistry(CUSTOM_REGISTRIES[0] ?? null);
+        setError("Unable to load registries. Showing custom defaults.");
+        return;
+      }
+
+      const registryList = parsedDomains.map((domain) => {
+        let name = domain;
+        try {
+          name = new URL(domain).hostname.replace("www.", "");
+        } catch (error) {
+          console.warn(
+            `Skipping invalid registry domain: ${domain}. ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+        return {
+          name,
+          url: domain,
+          domain: domain,
+        };
+      });
+
+      const knownDomains = new Set(parsedDomains);
+      for (const customRegistry of CUSTOM_REGISTRIES) {
+        const { domain: domainKey, error } = parseRegistryDomain(
+          customRegistry.url
+        );
+        if (!domainKey) {
+          console.warn(
+            `Skipping invalid custom registry URL: ${customRegistry.url}. ${
+              error ?? "Unable to parse URL."
+            }`
+          );
+          continue;
+        }
+        if (!knownDomains.has(domainKey)) {
+          knownDomains.add(domainKey);
+          registryList.push({
+            name: customRegistry.name,
+            url: customRegistry.url,
+            domain: domainKey,
+          });
+        }
+      }
+
+      const sortedRegistries = registryList.sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+
+      setRegistries(sortedRegistries);
+      setSelectedRegistry(sortedRegistries[0] ?? null);
+      setError(null);
     } catch (err) {
       console.error("Error fetching registries:", err);
-      setError("Failed to fetch registries");
+      if (isInitialFetch || isFallbackOnly(registries)) {
+        setRegistries(CUSTOM_REGISTRIES);
+        setSelectedRegistry(CUSTOM_REGISTRIES[0] ?? null);
+        setError("Unable to load registries. Showing custom defaults.");
+      } else {
+        setError(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -347,7 +472,7 @@ export default function RegistryPreview() {
     );
   }
 
-  if (error) {
+  if (error && !hasRegistries) {
     return (
       <div className="h-screen bg-background flex items-center justify-center">
         <Card className="w-full max-w-md">
@@ -410,6 +535,9 @@ export default function RegistryPreview() {
               className="pl-8 h-8 text-sm"
             />
           </div>
+          {error && hasRegistries && (
+            <p className="mt-2 text-xs text-destructive">{error}</p>
+          )}
         </div>
 
         <ScrollArea className="flex-1">
