@@ -293,9 +293,19 @@ export default function RegistryPreview() {
   };
 
   const fetchRegistries = async () => {
+    const fallbackRegistries = CUSTOM_REGISTRIES.map((registry) => ({
+      name: registry.name,
+      url: registry.url,
+      domain: registry.domain,
+    }));
+
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch("https://ui.shadcn.com/r/registries.json");
+      if (!res.ok) {
+        throw new Error(`Failed to fetch registries: ${res.status}`);
+      }
       const registriesData = await res.json();
 
       const domains = [
@@ -326,7 +336,11 @@ export default function RegistryPreview() {
       }
     } catch (err) {
       console.error("Error fetching registries:", err);
-      setError("Failed to fetch registries");
+      setRegistries(fallbackRegistries);
+      setSelectedRegistry(fallbackRegistries[0] ?? null);
+      if (fallbackRegistries.length === 0) {
+        setError("Failed to fetch registries.");
+      }
     } finally {
       setLoading(false);
     }
