@@ -293,6 +293,46 @@ export default function RegistryPreview() {
     setCurrentPageTitle(item.title);
   };
 
+  const REGISTRY_NAME_PLACEHOLDER = "registry";
+
+  const parseRegistryDomain = (registryUrl: string) => {
+    try {
+      const parsedUrl = new URL(
+        registryUrl.replaceAll("{name}", REGISTRY_NAME_PLACEHOLDER)
+      );
+      return { domain: `${parsedUrl.protocol}//${parsedUrl.host}`, error: null };
+    } catch (parseError) {
+      return {
+        domain: null,
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      };
+    }
+  };
+
+  const isFallbackOnly = (currentRegistries: Registry[]) => {
+    const isNonEmptyString = (value: string | null): value is string =>
+      typeof value === "string" && value.length > 0;
+    const customRegistryDomains = new Set(
+      CUSTOM_REGISTRIES.map((registry) => parseRegistryDomain(registry.url).domain)
+        .filter(isNonEmptyString)
+    );
+    const currentDomains = new Set(
+      currentRegistries
+      .map(
+        (registry) =>
+          parseRegistryDomain(registry.url).domain ?? registry.domain ?? null
+      )
+      .filter(isNonEmptyString)
+    );
+    return (
+      currentDomains.size === customRegistryDomains.size &&
+      Array.from(currentDomains).every((domain) =>
+        customRegistryDomains.has(domain)
+      )
+    );
+  };
+
+  // Extract registry base domains from registries.json entries.
   const parseRegistryDomains = (data: unknown) => {
     const entries = Array.isArray(data)
       ? data
@@ -318,15 +358,18 @@ export default function RegistryPreview() {
 
       if (!registryUrl) continue;
 
-      try {
-        const normalizedUrl = registryUrl.includes("{name}")
-          ? registryUrl.replace("{name}", "test")
-          : registryUrl;
-        const parsedUrl = new URL(normalizedUrl);
-        domains.add(`${parsedUrl.protocol}//${parsedUrl.host}`);
-      } catch (parseError) {
-        console.warn("Skipping invalid registry URL:", registryUrl, parseError);
+      const { domain: normalizedDomain, error } =
+        parseRegistryDomain(registryUrl);
+      if (!normalizedDomain) {
+        console.warn(
+          `Skipping invalid registry URL: ${registryUrl}. ${
+            error ?? "Unable to parse URL."
+          }`
+        );
+        continue;
       }
+
+      domains.add(normalizedDomain);
     }
 
     return Array.from(domains);
@@ -336,6 +379,7 @@ export default function RegistryPreview() {
     const isInitialFetch = registries.length === 0;
 
     try {
+      setError(null);
       setLoading(true);
       const res = await fetch("https://ui.shadcn.com/r/registries.json");
       if (!res.ok) {
@@ -351,20 +395,46 @@ export default function RegistryPreview() {
         return;
       }
 
-      const domains = [...parsedDomains];
+      const registryList = parsedDomains.map((domain) => {
+        let name = domain;
+        try {
+          name = new URL(domain).hostname.replace("www.", "");
+        } catch (error) {
+          console.warn(
+            `Skipping invalid registry domain: ${domain}. ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+        return {
+          name,
+          url: domain,
+          domain: domain,
+        };
+      });
 
-      // Add custom registry
+      const knownDomains = new Set(parsedDomains);
       for (const customRegistry of CUSTOM_REGISTRIES) {
-        if (!domains.includes(customRegistry.url)) {
-          domains.push(customRegistry.url);
+        const { domain: domainKey, error } = parseRegistryDomain(
+          customRegistry.url
+        );
+        if (!domainKey) {
+          console.warn(
+            `Skipping invalid custom registry URL: ${customRegistry.url}. ${
+              error ?? "Unable to parse URL."
+            }`
+          );
+          continue;
+        }
+        if (!knownDomains.has(domainKey)) {
+          knownDomains.add(domainKey);
+          registryList.push({
+            name: customRegistry.name,
+            url: customRegistry.url,
+            domain: domainKey,
+          });
         }
       }
-
-      const registryList = domains.map((domain) => ({
-        name: new URL(domain).hostname.replace("www.", ""),
-        url: domain,
-        domain: domain,
-      }));
 
       const sortedRegistries = registryList.sort((a, b) =>
         a.name.localeCompare(b.name)
@@ -375,12 +445,7 @@ export default function RegistryPreview() {
       setError(null);
     } catch (err) {
       console.error("Error fetching registries:", err);
-      const isFallbackOnly =
-        registries.length === CUSTOM_REGISTRIES.length &&
-        registries.every((registry) =>
-          CUSTOM_REGISTRIES.some((custom) => custom.url === registry.url)
-        );
-      if (isInitialFetch || isFallbackOnly) {
+      if (isInitialFetch || isFallbackOnly(registries)) {
         setRegistries(CUSTOM_REGISTRIES);
         setSelectedRegistry(CUSTOM_REGISTRIES[0] ?? null);
         setError("Unable to load registries. Showing custom defaults.");
