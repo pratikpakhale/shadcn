@@ -293,18 +293,14 @@ export default function RegistryPreview() {
   };
 
   const fetchRegistries = async () => {
-    const fallbackRegistries = CUSTOM_REGISTRIES.map((registry) => ({
-      name: registry.name,
-      url: registry.url,
-      domain: registry.domain,
-    }));
-
     try {
       setLoading(true);
       setError(null);
       const res = await fetch("https://ui.shadcn.com/r/registries.json");
       if (!res.ok) {
-        throw new Error(`Failed to fetch registries: ${res.status}`);
+        throw new Error(
+          `Failed to fetch registries: ${res.status} ${res.statusText}`
+        );
       }
       const registriesData = await res.json();
 
@@ -336,11 +332,15 @@ export default function RegistryPreview() {
       }
     } catch (err) {
       console.error("Error fetching registries:", err);
-      setRegistries(fallbackRegistries);
-      setSelectedRegistry(fallbackRegistries[0] ?? null);
-      if (fallbackRegistries.length === 0) {
-        setError("Failed to fetch registries.");
+      const errorMessage =
+        registries.length === 0
+          ? "Failed to fetch registries. Showing custom defaults."
+          : "Failed to refresh registries.";
+      if (registries.length === 0) {
+        setRegistries(CUSTOM_REGISTRIES);
+        setSelectedRegistry(CUSTOM_REGISTRIES[0] ?? null);
       }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -361,7 +361,7 @@ export default function RegistryPreview() {
     );
   }
 
-  if (error) {
+  if (error && registries.length === 0) {
     return (
       <div className="h-screen bg-background flex items-center justify-center">
         <Card className="w-full max-w-md">
@@ -424,6 +424,9 @@ export default function RegistryPreview() {
               className="pl-8 h-8 text-sm"
             />
           </div>
+          {error && registries.length > 0 && (
+            <p className="mt-2 text-xs text-destructive">{error}</p>
+          )}
         </div>
 
         <ScrollArea className="flex-1">
